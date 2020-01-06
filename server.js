@@ -117,7 +117,7 @@ let httpServer = http.createServer((req,res) => {
         }
     })
 })
-httpServer.listen(3000, () => console.log('Listening on port 3000 ...'))
+httpServer.listen(process.env.PORT || 3000, () => console.log('Listening ...'))
 
 
 
