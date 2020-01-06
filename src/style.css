@@ -1,0 +1,133 @@
+* {
+    box-sizing: border-box;
+    padding: 0;
+    margin: 0;
+    overflow: hidden;
+}
+
+html, body {
+    height: 100%;
+}
+
+body {
+    background: lightgray;
+}
+
+@font-face {
+    font-family: "Bandicoot";
+    src: url("crash-a-like.ttf") format("truetype");
+}
+
+.HallOfFame {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    font-family: "Bandicoot", Arial, Helvetica, sans-serif;
+    position: absolute;
+    right: 0;
+    top: 200px;
+    z-index: 2;
+    background: black;
+    color: white;
+    opacity: 0.5;
+    padding: 10px;
+    border-radius: 5px;
+    width: 200px;
+    margin: 10px;
+}
+
+.HallOfFame > span {
+    font-size: 30px;
+    margin-bottom: 10px;    
+}
+
+.HallOfFame > table {
+    width: 100%;
+    font-size: 30px;
+}
+
+
+
+
+.Dialog {
+    z-index: 2;
+    position: absolute;
+    left: 33.3%;
+    top: 33.3%;
+    width: 33.3%;
+    height: 33.3%;
+    border-radius: 10px;
+    background: rgba(0,0,0,.5);
+    color: white;
+    font-family: "Bandicoot", Arial, Helvetica, sans-serif;
+    font-size: 30px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-around;
+
+}
+
+.Dialog > span:nth-child(1) {
+    font-size: 50px;
+    margin-bottom: 10px;
+    margin-top: 10px;
+}
+
+
+
+.Dialog input {
+    flex-basis: 50%;
+    margin: 10px;
+}
+
+.Dialog > div {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+}
+
+button {
+    background: transparent;
+    border: none;
+    font-family: "Bandicoot";
+    font-size: 30px;
+    color: orange;
+    padding: 10px;
+}
+
+button:hover, button:focus {
+    animation: blinking .5s step-start 0s infinite;
+    background: rgba(0,0,0,.1);
+}
+
+
+@keyframes blinking {
+    50% {
+        color: orange;
+    }
+
+    100% {
+        color: lightgray;
+    }
+}
+
+input {
+    background: transparent;
+    border: none;
+    font-family: "Bandicoot";
+    font-size: 30px;
+    color: orange;
+    border-bottom: solid 3px orange;
+}
+
+
+
+.Canvas ~ span {
+    position: absolute;
+    font-family: "Bandicoot";
+    z-index: 4;
+    top: 0;
+    left: 0;
+}

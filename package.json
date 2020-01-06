@@ -1,0 +1,38 @@
+{
+  "name": "agario",
+  "version": "1.0.0",
+  "description": "Agario clone",
+  "main": "server.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "parcel watch src/index.html",
+    "build": "parcel build src/index.html"
+  },
+  "author": "Deniz Basgoren",
+  "license": "GPL3",
+  "dependencies": {
+    "immer": "^5.1.0",
+    "preact": "^10.1.1",
+    "serve-static": "^1.14.1"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.7.7",
+    "@babel/plugin-transform-react-jsx": "^7.7.7",
+    "@babel/preset-env": "^7.7.7",
+    "parcel-bundler": "^1.12.4"
+  },
+  "babel": {
+    "presets": [
+      "@babel/preset-env"
+    ],
+    "plugins": [
+      [
+        "@babel/plugin-transform-react-jsx",
+        {
+          "pragma": "h",
+          "pragmaFrag": "Fragment"
+        }
+      ]
+    ]
+  }
+}
