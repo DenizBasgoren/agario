@@ -3,6 +3,7 @@ let http = require('http')
 let ws = require('ws')
 let repl = require('repl')
 let fs = require('fs')
+let process = require('process')
 let staticServer = require('serve-static')(`${__dirname}/dist`, {
     index: ['index.html'],
     fallthrough: false
