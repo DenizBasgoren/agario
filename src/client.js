@@ -8,6 +8,7 @@ import { produce } from 'immer'
 
 let context = createContext()
 let websocket
+let debugTimer
 
 
 let init = {
@@ -26,6 +27,7 @@ let init = {
     uid: null,
     ranking: [ ], // [{name,score}]
     gameState: 'name', // name, game, gameover, disconnected, oops
+    // ping: 0
 }
 
 
@@ -64,7 +66,10 @@ let act = {
         if (s.origin.scaleFactor <= 0) {
             s.origin.scaleFactor = 1
         }
-    })
+    }),
+    // updatePing: newval => produce( s => {
+    //     s.ping = newval
+    // })
 }
 
 ////////////////// utils
@@ -128,6 +133,9 @@ function App () {
                 // console.log(`positions`)
                 // console.log(msg[1])
                 ss( act.updatePositionsAndRanking(msg[1], msg[2]) )
+                console.clear()
+                console.log( new Date().getTime() - debugTimer )
+                debugTimer = new Date().getTime()
             }
             if (msg[0] === 'setuid') {
                 console.log(`uid: ${msg[1]}`)
