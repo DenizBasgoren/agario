@@ -128,7 +128,6 @@ input {
 .Canvas ~ span {
     position: absolute;
     font-family: "Bandicoot";
-    /* z-index: 4; */
     top: 0;
     left: 0;
 }
@@ -142,8 +141,6 @@ input {
     right: 0;
     top: 0;
     z-index: 10;
-    /* background: black; */
-    /* color: white; */
     opacity: 0.5;
     padding: 10px;
     border-radius: 5px;
