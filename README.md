@@ -5,7 +5,7 @@ Online multiplayer Agario clone (v1.0)
 
 ### Or play locally:
 * `cd agario`
-* `npm install
+* `npm install`
 * `npm run watch`
 * `npm run start`
 * And go to `localhost:3000`
