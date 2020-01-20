@@ -9,23 +9,45 @@ let staticServer = require('serve-static')(`${__dirname}/dist`, {
     fallthrough: false
 })
 
-const INITIALSCORE = 2000
+const INITIALSCORE = 1000
 const BOTSPEED = 3
 const HUMANSPEED = 3
-const SPAWNAREA = 1000
+const SPAWNAREA = 500
 const TOTALBOTS = 100
 
 repl.start({ useGlobal: true})
 
 ///   db
-let db = global.db = {
-    players: randomBots(TOTALBOTS),
-    rankings: [], // {name: 'Deniz Basgoren', score: 1}
+let db
+db = global.db = {
+    players: randomBots(TOTALBOTS).sort((a,b) => b.score - a.score ),
     websockets: new Set()
 }
 
 
 // util
+function insertIntoSortedArray(el, arr) {
+
+    if (el.score <= arr[ arr.length-1 ].score ) {
+        arr.push(el)
+    }
+    else {
+        for (let i = 0; i<arr.length; i++) {
+            if ( el.score > arr[i].score) {
+                arr.splice(i, 0, el)
+                break
+            }
+        }
+    }
+
+}
+
+
+function randomScore() {
+    return Math.floor( (Math.random() + 1) ** 13)
+}
+
+
 function randomBots(n) {
     let bots = []
 
@@ -36,7 +58,7 @@ function randomBots(n) {
             type: 'bot', // bot human
             status: 'playing', // playing resting
             name: randomName(),
-            score: Math.floor( (Math.random() + 1) ** 13) ,
+            score: randomScore(),
             color: ['red', 'orange', 'yellow', 'green', 'cyan', 'blue', 'purple'][Math.floor(Math.random() * 7)],
             uid: Math.floor(Math.random() * 10**15 )
         }
@@ -51,7 +73,19 @@ function randomBots(n) {
             for (let i = 0; i<bots.length; i++) {
                 if (distance({x,y}, bots[i]) < Math.sqrt( .3183 * bot.score) + Math.sqrt( .3183 * bots[i].score) + 10) {
                     collision = true
+                    // console.log('col')
                     break
+                }
+            }
+
+            if (db && db.players) {
+                for (let i = 0; i<db.players.length; i++) {
+                    if (db.players[i].status === 'resting') continue
+                    if (distance({x,y}, db.players[i]) < Math.sqrt( .3183 * bot.score) + Math.sqrt( .3183 * db.players[i].score) + 10) {
+                        collision = true
+                        // console.log('col')
+                        break
+                    }
                 }
             }
 
@@ -59,7 +93,8 @@ function randomBots(n) {
                 bot.x = x
                 bot.y = y
             }
-            k++
+
+            if (Math.random() < .05) k++
         }
 
         // if (bots.length === 0) {
@@ -119,45 +154,115 @@ function randomMove() {
     }
 }
 
-function botMove(botIndex) {
+// function botMove(botIndex) {
+//     if (db.players.length === 1) return randomMove()
+
+//     let closestEnemyIndex = 0
+//     let closestEnemyDistance = distance( db.players[0], db.players[botIndex])
+//     let closestTargetIndex = 0
+//     let closestTargetDistance = closestEnemyDistance
+
+//     for (let i = 0; i< db.players.length; i++) {
+//         if (i === botIndex) continue
+
+//         let dist = distance( db.players[i], db.players[botIndex])
+//         // enemy
+//         if (db.players[i].score > db.players[i].score) {
+//             if ( dist < closestEnemyDistance) {
+//                 closestEnemyIndex = i
+//                 closestEnemyDistance = dist
+//             }
+//         }
+//         else {
+//             if ( dist < closestTargetDistance) {
+//                 closestTargetIndex = i
+//                 closestTargetDistance = dist
+//             }
+//         }
+//     }
+
+//     // gonna attack
+//     if (closestEnemyDistance > closestTargetDistance) {
+//         return {
+//             x: db.players[closestTargetIndex].x - db.players[botIndex].x > 0 ? 1 : -1,
+//             y: db.players[closestTargetIndex].y - db.players[botIndex].y > 0 ? 1 : -1,
+//         }
+//     }
+//     else {
+//         return {
+//             x: db.players[closestTargetIndex].x - db.players[botIndex].x > 0 ? -1 : 1,
+//             y: db.players[closestTargetIndex].y - db.players[botIndex].y > 0 ? -1 : 1,
+//         }
+//     }
+// }
+
+function botMove( ind ) {
     if (db.players.length === 1) return randomMove()
 
-    let closestEnemyIndex = 0
-    let closestEnemyDistance = distance( db.players[0], db.players[botIndex])
-    let closestTargetIndex = 0
-    let closestTargetDistance = closestEnemyDistance
+    // min distance between i and bigger ones
+    let distB = Infinity
+    let minDistantBInd
 
-    for (let i = 0; i< db.players.length; i++) {
-        if (i === botIndex) continue
+    for (let i = ind-1; i> -1; i--) {
+        if (db.players[i].status === 'resting') continue
 
-        let dist = distance( db.players[i], db.players[botIndex])
-        // enemy
-        if (db.players[i].score > db.players[i].score) {
-            if ( dist < closestEnemyDistance) {
-                closestEnemyIndex = i
-                closestEnemyDistance = dist
-            }
-        }
-        else {
-            if ( dist < closestTargetDistance) {
-                closestTargetIndex = i
-                closestTargetDistance = dist
-            }
+        let dist = distance(db.players[i], db.players[ind])
+        if ( dist < distB) {
+            distB = dist
+            minDistantBInd = i
         }
     }
 
-    // gonna attack
-    if (closestEnemyDistance > closestTargetDistance) {
-        return {
-            x: db.players[closestTargetIndex].x - db.players[botIndex].x > 0 ? 1 : -1,
-            y: db.players[closestTargetIndex].y - db.players[botIndex].y > 0 ? 1 : -1,
+    // min distance between i and smaller but comparable ones
+    let distS = Infinity
+    let minDistantSInd
+
+    for (let i = ind+1; i<db.players.length; i++) {
+        if (db.players[i].status === 'resting') continue
+        if (db.players[i].score * 10 < db.players[ind].score) break
+        
+        let dist = distance(db.players[i], db.players[ind])
+        if ( dist < distS) {
+            distS = dist
+            minDistantSInd = i
         }
+    }
+
+    let {x, y} = db.players[ind]
+
+    if (distB > distS) {
+        if (distS === Infinity) return randomMove()
+
+        let tx = db.players[minDistantSInd].x
+        let ty = db.players[minDistantSInd].y
+        let a = (Math.atan2(ty-y, tx-x) + 3.14159265) * 8 / 3.14159265
+
+        if (a < 1) return {x: -1, y: 0}
+        else if (a < 3) return {x: -1, y: -1}
+        else if (a < 5) return {x: 0, y: -1}
+        else if (a < 7) return {x: 1, y: -1}
+        else if (a < 9) return {x: 1, y: 0}
+        else if (a < 11) return {x: 1, y: 1}
+        else if (a < 13) return {x: 0, y: 1}
+        else if (a < 15) return {x: -1, y: 1}
+        else return {x: -1, y: 0}
     }
     else {
-        return {
-            x: db.players[closestTargetIndex].x - db.players[botIndex].x > 0 ? -1 : 1,
-            y: db.players[closestTargetIndex].y - db.players[botIndex].y > 0 ? -1 : 1,
-        }
+        if (distB === Infinity) return randomMove()
+
+        let ex = db.players[minDistantBInd].x
+        let ey = db.players[minDistantBInd].y
+        let a = (Math.atan2(ey-y, ex-x) + 3.14159265) * 8 / 3.14159265
+
+        if (a < 1) return {x: 1, y: 0}
+        else if (a < 3) return {x: 1, y: 1}
+        else if (a < 5) return {x: 0, y: 1}
+        else if (a < 7) return {x: -1, y: 1}
+        else if (a < 9) return {x: -1, y: 0}
+        else if (a < 11) return {x: -1, y: -1}
+        else if (a < 13) return {x: 0, y: -1}
+        else if (a < 15) return {x: 1, y: -1}
+        else return {x: 1, y: 0}
     }
 }
 
@@ -167,7 +272,7 @@ function randomName() {
     let firstLetter = ['B', 'Ch', 'D', 'F', 'G', 'H', 'J', 'K', 'L', 'M', 'N', 'P', 'Q', 'S', 'Sh', 'T', 'W', 'X', 'Y', 'Zh']
     let secondLetter = ['a', 'e', 'i', 'o', 'u']
     let thirdLetter = ['', '', '', '', '', 'a', 'e', 'i', 'o', 'u']
-    let fourthLetter = ['', 'ng']
+    let fourthLetter = ['', '', 'ng']
 
     for (let i = 0; i<2; i++) {
         name += firstLetter[ Math.floor(Math.random() * firstLetter.length) ]
@@ -259,6 +364,7 @@ wsServer.on('connection', socket => {
 
                 let collision = false
                 for (let i = 0; i<db.players.length; i++) {
+                    if (db.players[i].status === 'resting') continue
                     if (distance({x,y}, db.players[i]) < Math.sqrt( .3183 * player.score) + Math.sqrt( .3183 * db.players[i].score) + 10) {
                         collision = true
                         break
@@ -269,13 +375,15 @@ wsServer.on('connection', socket => {
                     player.x = x
                     player.y = y
                 }
-                k++
+
+                if (Math.random() < .05) k++
             }
 
 
-            db.players.push(player)
+            // db.players.push(player)
+            insertIntoSortedArray(player, db.players)
             socket.uid = player.uid
-            updateRanking(player)
+            // updateRanking(player)
 
             socket.send(JSON.stringify([
                 'setuid',
@@ -299,6 +407,9 @@ wsServer.on('connection', socket => {
 
         else if (msg[0] === 'restart') {
 
+            /// DEBUG
+            // console.log('restart???')
+
             let player
             for (let i = 0; i<db.players.length; i++) {
                 if (db.players[i].uid === socket.uid) {
@@ -320,6 +431,7 @@ wsServer.on('connection', socket => {
 
                 let collision = false
                 for (let i = 0; i<db.players.length; i++) {
+                    if (db.players[i].status === 'resting') continue
                     if (distance({x,y}, db.players[i]) < Math.sqrt( .3183 * player.score) + Math.sqrt( .3183 * db.players[i].score) + 10) {
                         collision = true
                         break
@@ -330,7 +442,8 @@ wsServer.on('connection', socket => {
                     player.x = x
                     player.y = y
                 }
-                k++
+
+                if (Math.random() < .05) k++
             }
             // status playing
             player.status = 'playing'
@@ -359,33 +472,33 @@ function handleSocketClose(socket) {
         return
     }
 
-    updateRanking(player)
+    // updateRanking(player)
     db.players.splice(playerIndex, 1)
     db.websockets.delete(socket)
 }
 
-function updateRanking(player) {
-    for (let j = 0; j<10; j++) {
-        if ( !db.rankings[j] ) {
-            db.rankings[j] = {
-                name: player.name,
-                score: player.score
-            }
-            break
-        }
-        else {
-            if (db.rankings[j].score < player.score) {
-                db.rankings.splice(j, 0, {
-                    name: player.name,
-                    score: player.score
-                })
+// function updateRanking(player) {
+//     for (let j = 0; j<10; j++) {
+//         if ( !db.rankings[j] ) {
+//             db.rankings[j] = {
+//                 name: player.name,
+//                 score: player.score
+//             }
+//             break
+//         }
+//         else {
+//             if (db.rankings[j].score < player.score) {
+//                 db.rankings.splice(j, 0, {
+//                     name: player.name,
+//                     score: player.score
+//                 })
 
-                db.rankings.splice(10, 1)
-                break
-            }
-        }
-    }
-}
+//                 db.rankings.splice(10, 1)
+//                 break
+//             }
+//         }
+//     }
+// }
 
 // LOOP
 setInterval( function serverLoop () {
@@ -405,28 +518,65 @@ setInterval( function serverLoop () {
     }
 
     //send updates
+    // let ranking = db.players.filter((p,i) => i < 10).map(p => ({name: p.name, score: p.score}))
     db.websockets.forEach(socket => {
         socket.send(JSON.stringify([
             'update',
             db.players.filter(p => p.status === 'playing').map(p => {
                 return { x: p.x, y: p.y, score: p.score, name: p.name, color: p.color, uid: p.uid}
             }),
-            db.rankings
+            // ranking
         ]))
     })
 
+    ////////
+
     // collision detection
-    for (let i = 1; i< db.players.length; i++) {
+    let toBeReInserted = []
 
-        if (db.players[i].status === 'resting') continue
+    smalls:
+    for (let i = 1; i<db.players.length; i++) {
 
-        for (let j = 0; j< i; j++) {
+        if (db.players[i].status === 'resting') {
+            // if (db.players[i].name === 'k') console.log( 'resting')
+            continue
+        }
 
-            if (db.players[j].status === 'resting') continue
+        // if (db.players[i].status === 'resting') {
+        //     console.log('wtf')
+        // }
+
+        // if (db.players[i].status === 'resting') console.log('i out wtf ?!?!?!?!?!?!?!')
+
+
+        for (let j = 0; j<i; j++) {
+
+            // if (db.players[i].status === 'resting') console.log('i in wtf ?!?!?!?!?!?!?!')
+
+            // DEBUG
+            // if (db.players[i].name === 'k' && db.players[i].status === 'resting') {
+            //     console.log(`i ${db.players[i].name} j ${db.players[j].name}`)
+            // }
+            // if (db.players[j].name === 'k' && db.players[j].status === 'resting') {
+            //     console.log('???')
+            // }
+
+            if (db.players[j].status === 'resting') {
+                // if (db.players[j].name === 'k') console.log( new Date().getTime() )
+                continue
+            }
+
+            // if (db.players[i].status === 'resting') console.log('i wtf ?!?!?!?!?!?!?!')
+            // if (db.players[j].status === 'resting') console.log('j wtf ?!?!?!?!?!?!?!')
+
+            // console.log(`pi`)
+            // console.log(db.players[i])
 
             if ( distance( db.players[i], db.players[j]) < Math.sqrt( .3183 * db.players[i].score) + Math.sqrt( .3183 * db.players[j].score)) {
 
                 // collision detected
+
+                /*
                 // let big, small
                 let bigIndex, smallIndex
                 if (db.players[i].score > db.players[j].score ) {
@@ -441,36 +591,128 @@ setInterval( function serverLoop () {
                     // big = db.players[bigIndex]
                     // small = db.players[smallIndex]
                 }
+                */
 
-                db.players[bigIndex].score += db.players[smallIndex].score
+                // bigger = j, smaller = i
 
-                // debug
-                if (db.players[bigIndex].name === 'k') {
-                    // console.log(`k : ${db.players[bigIndex].score}`)
-                }
+                ///// DEBUG
+                // let N = db.players[i].status
 
-                updateRanking( db.players[smallIndex] )
+                db.players[j].score += db.players[i].score
 
-                if (db.players[smallIndex].type === 'bot') {
+                // let DEBUG1 = db.players[i].name
+
+                let bigger = db.players.splice(j, 1)[0]
+                insertIntoSortedArray( bigger, db.players)
+
+                // if (DEBUG1 !== db.players[i].name) console.log(`i before ${DEBUG1} i after: ${db.players[i].name}`)
+
+                // updateRanking( db.players[smallIndex] )
+
+                if (db.players[i].type === 'bot') {
                     // new bot
-                    db.players[smallIndex] = randomBots(1)[0]
+                    // db.players[smallIndex] = randomBots(1)[0]
+
+                    // if (db.players[i].status === 'resting' || db.players[j].status === 'resting') console.log('?!?!?!')
+                    db.players.splice(i, 1)
+                    toBeReInserted.push(randomBots(1)[0])
+
+                    
+                    // insertIntoSortedArray(randomBots(1)[0], db.players)
                 }
                 else {
-                    db.players[smallIndex].status = 'resting'
-                    db.players[smallIndex].score = INITIALSCORE
+
+                    // DEBUG
+                    // if (db.players[i].status === 'resting' && db.players[i].name === 'k') {
+                    //     console.log(`!! ${N}`)
+                    // }
+                    // if (db.players[i].status === 'resting' || db.players[j].status === 'resting') console.log('?!?!?!')
+                    // console.log(`i ${db.players[i].name} st ${db.players[i].status} j ${db.players[j].name}`)
+
+                    let smaller = db.players.splice(i,1)[0]
+                    
+                    smaller.status = 'resting'
+                    smaller.score = INITIALSCORE
+
+                    toBeReInserted.push(smaller)
+                    // insertIntoSortedArray(smaller, db.players)
+
+                    // db.players[smallIndex].status = 'resting'
+                    // db.players[smallIndex].score = INITIALSCORE
                     /////////// inform user that they lost
 
                     db.websockets.forEach(socket => {
-                        if (socket.uid === db.players[smallIndex].uid) {
+                        if (socket.uid === smaller.uid) {
                             socket.send(JSON.stringify([
-                                'gameover'
+                                'youareeaten',
+                                bigger.name
                             ]))
                         }
                     })
                     
                 }
+
+                break
             }
         }
+    }
+
+    // reinsert
+    for (let i = 0; i<toBeReInserted.length; i++) {
+        // console.log('check')
+        // console.log(toBeReInserted[i])
+        insertIntoSortedArray( toBeReInserted[i], db.players)
+    }
+
+    // session over?
+
+    // let totalScore = 0, biggestIndex = 0, biggestScore = 0
+    let totalScore = 0
+    for (let i = 1; i<db.players.length; i++) {
+        if ( db.players[i].status === 'resting') continue
+
+        totalScore += db.players[i].score
+
+        // if (db.players[i].score > biggestScore) {
+        //     biggestScore = db.players[i].score
+        //     biggestIndex = i
+        // }
+    }
+
+    if ( db.players[0].score > totalScore) {
+        // game over
+
+        let winnerName = db.players[0].name
+
+        db.websockets.forEach(socket => {
+            for (let i = 0; i<db.players.length; i++) {
+                if (db.players[i].uid === socket.uid) {
+                    if (db.players[i].status === 'playing') {
+                        socket.send(JSON.stringify([
+                            'gameover',
+                            winnerName
+                        ]))
+                    }
+                    break
+                }
+            }   
+        })
+
+        // reset all pts
+        for (let i = 0; i<db.players.length; i++) {
+            if (db.players[i].type === 'human') {
+                // console.log(db.players[i])
+
+                db.players[i].score = INITIALSCORE
+                db.players[i].status = 'resting'
+            }
+            else {
+                db.players[i].score = randomScore()
+            }
+        }
+        
+        db.players.sort((a,b) => b.score - a.score )
+        
     }
 
 }, 1000/3)
