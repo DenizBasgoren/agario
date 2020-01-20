@@ -1,5 +1,3 @@
-// import React, { useState, useContext, useEffect, createContext } from 'react'
-// import { render } from 'react-dom'
 
 import {h, Fragment, render, createContext } from 'preact'
 import {useState, useContext, useEffect, useRef } from 'preact/hooks'
@@ -8,68 +6,45 @@ import { produce } from 'immer'
 
 let context = createContext()
 let websocket
-// let debugTimer
 
-
+// INITIAL GLOBAL STATE
 let init = {
-    // prevPositions: [],
-    // currentPositions: [],
     positions: {}, // { [uid]: { x, y, px, py, score, name, color } }
-
-    // origin: {
-    //     x: Math.floor(window.innerWidth/2),
-    //     y: Math.floor(window.innerHeight/2),
-    //     scale: 1
-    // },
     transitionCompletionPercentage: 0,
-    // origin: {
-        // x: 0,
-        // y: 0,
-        // scale: 10,
-        // zoomLevel: 100
-    // },
-    // scale: 1,
-    zoomLevel: 1,
+    zoomLevel: 5,
     myScore: 10,
     eatenBy: null,
     winnerName: null,
     uid: null,
     ranking: [ ], // [{name,score}]
     gameState: 'name', // name, game, youareeaten, gameover, oops
-    // ping: 0
 }
 
 
-
-
-//////////////////////////////
-let act = {
+// PRODUCTIONS ( GLOBAL STATE CHANGING FUNCTIONS )
+let prod = {
     setGameState: to => produce( s => {
         s.gameState = to
     }),
     updatePositions: gp => produce( s => {
-        // s.ranking = rnk
-        ///////////////// !!!!!!!!!!
-        // s.prevPositions = s.currentPositions
-        // s.currentPositions = gp
 
+        // positions are always sorted, so first 10 are top 10
         s.ranking = gp.filter( (p,i) => i < 10)
 
+        // convert from [{uid, ...}] to {[uid]: {...}} format
         for (let i = 0; i<gp.length; i++) {
             let currentUser
 
             for (let uid in s.positions) {
 
-                // if (Math.random() < .00001 ) console.log(`uid ${uid} gpi ${gp[i].uid}`)
                 if (gp[i].uid == uid) {
-                    // console.log('!')
                     currentUser = s.positions[uid]
                     break
                 }
             }
 
+            // if an already registered user
             if (currentUser) {
-                // console.log('f')
                 currentUser.px = currentUser.x
                 currentUser.py = currentUser.y
                 currentUser.x = gp[i].x
@@ -77,8 +52,7 @@ let act = {
                 currentUser.score = gp[i].score
                 currentUser.notStale = true
             }
-            else {
-                // console.log('nf')
+            else { // or a new one
                 s.positions[ gp[i].uid ] = gp[i]
                 gp[i].px = gp[i].x
                 gp[i].py = gp[i].y
@@ -86,14 +60,14 @@ let act = {
             }
         }
 
+        // if me, save my score
         if (s.positions[s.uid] && s.gameState === 'game') {
-            console.log(`updatin score with ${s.positions[s.uid].score}`)
             s.myScore = s.positions[s.uid].score
         }
 
+        // delete stale records (eaten ones)
         for (let uid in s.positions) {
             if (!s.positions[uid].notStale) {
-                // if stale
                 delete s.positions[uid]
             }
             else {
@@ -111,25 +85,17 @@ let act = {
         if (s.zoomLevel <= 1) {
             s.zoomLevel = 1
         }
-        // if (s.uid) {
-        //     s.scale = s.zoomLevel / Math.sqrt( .3183 * s.positions[s.uid].score )
-        //     // s.scale = s.zoomLevel / s.positions[s.uid].score
-        // }
-        // else {
-        //     s.scale = s.zoomLevel / 1
-        // }
     }),
-    // updatePing: newval => produce( s => {
-    //     s.ping = newval
-    // })
+    // ones current position is determined by (current pt - prev pt) * transitionPercentage
+    // this creates an illusion of movement
     increaseTransitionPercentage: () => produce( s => {
         s.transitionCompletionPercentage += .1
         if (s.transitionCompletionPercentage > 1) {
             s.transitionCompletionPercentage = 1
         }
     }),
+    // once server returns new coords, reset to 0
     resetTransitionPercentage: () => produce( s => {
-        // console.log(`reset! prc ${s.transitionCompletionPercentage}`)
         s.transitionCompletionPercentage = 0
     }),
     setEatenBy: name => produce( s => {
@@ -140,7 +106,7 @@ let act = {
     })
 }
 
-////////////////// utils
+// UTILS
 function useInterval(callback, delay) {
     const savedCallback = useRef();
   
@@ -163,17 +129,22 @@ function useInterval(callback, delay) {
 }
 
 
-//////////////////////////////
+// RENDER APP COMPONENT
 render(<App />, document.getElementById('root'))
+
+// APP COMPONENT
 function App () {
 
+    // BY CONVENTION,
+    // S = LOCAL STATE, SS = SET LOCAL STATE
+    // G = GLOBAL STATE, GG = SET GLOBAL STATE
     let [s,ss] = useState(init)
 
-    // debug
+    // FOR DEBUG PURPOSES, YOU CAN REACT GLOBAL STATE AND SET STATE THRU THESE VARS
     window._state = s
     window._setstate = ss
 
-    // on mount
+    // only once
     useEffect(() => {
 
         // ws init
@@ -185,46 +156,44 @@ function App () {
                 websocket = new WebSocket(`wss://${location.host}/`)
             }
             catch(ee) {
-                ss( act.setGameState('oops') )
+                ss( prod.setGameState('oops') )
             }
         }
     
         websocket.onerror = ev => {
-            ss( act.setGameState('oops') )
+            ss( prod.setGameState('oops') )
         }
 
         websocket.onclose = ev => {
-            ss( act.setGameState('oops') )
+            ss( prod.setGameState('oops') )
         }
     
         websocket.onmessage = encryptedMsg => {
 
             let msg = JSON.parse(encryptedMsg.data)
             
+            // 0TH ITEM ALWAYS IS MSG TYPE
             if (msg[0] === 'update') {
-                // console.log('!')
-                ss( act.updatePositions(msg[1]) )
-                ss( act.resetTransitionPercentage() )
+                ss( prod.updatePositions(msg[1]) )
+                ss( prod.resetTransitionPercentage() )
             }
             else if (msg[0] === 'setuid') {
-                // console.log(`uid: ${msg[1]}`)
-                ss( act.setUid(msg[1]) )
+                ss( prod.setUid(msg[1]) )
             }
             else if (msg[0] === 'youareeaten') {
-                console.log('gg')
-                ss( act.setGameState('youareeaten'))
-                ss( act.setEatenBy(msg[1]) )
+                ss( prod.setGameState('youareeaten'))
+                ss( prod.setEatenBy(msg[1]) )
             }
             else if (msg[0] === 'gameover') {
-                console.log('go')
-                ss( act.setGameState('gameover'))
-                ss( act.setWinnerName( msg[1]))
+                ss( prod.setGameState('gameover'))
+                ss( prod.setWinnerName( msg[1]))
             }
         }        
 
     }, [])
 
-
+    // PASS APP STATE AND SETSTATE THRU CONTEXT, SO THAT IT IS CHANGEABLE EVERYWHERE
+    // IT WILL BE REFERENCED AS [G,GG] ON CHILDREN
     return <context.Provider value={[s,ss]}>
         <Canvas />
         <DialogManager />
@@ -236,39 +205,8 @@ function App () {
 }
 
 
-///// HallOfFame
+// COMPONENTS
 function HallOfFame({children}) {
-
-    // let ranking = []
-
-    // for (let uid in children) {
-    //     let player = children[uid]
-
-    //     for (let j = 0; j<10; j++) {
-    //         if ( !ranking[j] ) {
-    //             ranking[j] = {
-    //                 name: player.name,
-    //                 score: player.score
-    //             }
-    //             break
-    //         }
-    //         else {
-    //             if (ranking[j].score < player.score) {
-    //                 ranking.splice(j, 0, {
-    //                     name: player.name,
-    //                     score: player.score
-    //                 })
-    
-    //                 ranking.splice(10, 1)
-    //                 break
-    //             }
-    //         }
-    //     }
-
-    // }
-
-    // let ranking = children.filter((p,i) => i < 10)
-
 
     return <div className='HallOfFame'>
     <span>HALL OF FAME</span>
@@ -289,12 +227,10 @@ function HallOfFame({children}) {
     </div>
 }
 
-
-///// DialogManager
 function DialogManager() {
     let [g,gg] = useContext(context)
-    let [name, setName] = useState('')
-    let [color, setColor] = useState('red')
+    let [name, setName] = useState(window.localStorage.name || '')
+    let [color, setColor] = useState( window.localStorage.color || 'red')
 
     if (g.gameState === 'name') {
         return <Dialog title='WELCOME TO AGARIO' >
@@ -345,11 +281,13 @@ function DialogManager() {
         </Dialog>
     }
 
+    // handlers
     function handleInput(ev) {
         let filterName = str => str.substr(0, 10).split('').filter(l => l.charCodeAt() >= 32 && l.charCodeAt() <= 126).join('')
         let filteredName = filterName(ev.target.value)
         ev.target.value = filteredName
         setName( filteredName )
+        window.localStorage.name = filteredName
     }
 
     function handleStart() {
@@ -359,7 +297,7 @@ function DialogManager() {
             color
         ]))
 
-        gg( act.setGameState('game') )
+        gg( prod.setGameState('game') )
     }
 
     function handleColorChange(direction) {
@@ -367,6 +305,7 @@ function DialogManager() {
         let currentIndex = colors.indexOf(color)
         let nextIndex = ( currentIndex + direction + 7 ) % 7
         setColor(colors[nextIndex])
+        window.localStorage.color = colors[nextIndex]
     }
 
     function handleRestart() {
@@ -374,13 +313,11 @@ function DialogManager() {
             'restart'
         ]))
 
-        gg( act.setGameState('game') )
+        gg( prod.setGameState('game') )
     }
 }
 
 
-
-//// Dialog
 function Dialog({title, children}) {
     return <div className='Dialog'>
         <span>{title}</span>
@@ -388,7 +325,6 @@ function Dialog({title, children}) {
     </div>
 }
 
-///// Canvas
 function Canvas() {
     let [g,gg] = useContext(context)
     let ref = useRef(null)
@@ -396,7 +332,6 @@ function Canvas() {
     let [rightKey, setRightKey] = useState(0)
     let [downKey, setDownKey] = useState(0)
     let [upKey, setUpKey] = useState(0)
-    // console.log(` ^ ${upKey} v ${downKey} < ${leftKey} > ${rightKey}`)
 
     // first time only
     useEffect(() => {
@@ -443,14 +378,13 @@ function Canvas() {
         }
 
         window.onwheel = ev => {
-            gg( act.setZoomLevel( ev.deltaY) )
+            gg( prod.setZoomLevel( ev.deltaY) )
         }
 
     }, [])
 
-
+    // SEND COORDS AT 10FPS
     useInterval(() => {
-        // console.log(` ^ ${upKey} v ${downKey} < ${leftKey} > ${rightKey}`)
         let horizontal = leftKey + rightKey
         let vertical = upKey + downKey
 
@@ -464,7 +398,7 @@ function Canvas() {
     }, 1000/10)
 
     useInterval(() => {
-        gg( act.increaseTransitionPercentage() )
+        gg( prod.increaseTransitionPercentage() )
     }, 1000/30)
 
     useEffect(() => {
@@ -472,11 +406,8 @@ function Canvas() {
         ctx.clearRect(0,0, window.innerWidth, window.innerHeight)
 
         for (let uid in g.positions) {
-            drawPoop( ctx, g.positions[uid], g)
+            drawPlayers( ctx, g.positions[uid], g)
         }
-
-        // drawRadar(ctx, g)
-
     })
 
     return <>
@@ -484,14 +415,9 @@ function Canvas() {
         {
             Object.values(g.positions).map( (player, id) => {
 
-                // let r = Math.sqrt( .3183 * p.score ) * g.scale
+                // M A T H
                 let origin = g.positions[ g.uid ] || {x: 0, y: 0, px: 0, py: 0, score: 10}
                 let r = 10 * g.zoomLevel * Math.sqrt( player.score / origin.score)
-
-                // let x = (p.x + (p.x - p.px) * g.transitionCompletionPercentage -
-                // origin.x - (origin.x - origin.px) * g.transitionCompletionPercentage) * g.zoomLevel / 100 + Math.floor(window.innerWidth/2) - r * .1 * p.name.length
-                // let y = (p.y + (p.y - p.py) * g.transitionCompletionPercentage -
-                // origin.y - (origin.y - origin.py) * g.transitionCompletionPercentage) * g.zoomLevel / 100 + Math.floor(window.innerHeight/2) - r * 1.7
 
                 let x = 10 * g.zoomLevel / Math.sqrt( origin.score / 3.14159265 ) *
                     ( player.px + (player.x - player.px) * g.transitionCompletionPercentage -
@@ -518,7 +444,7 @@ function Canvas() {
 
 
 
-function drawPoop(ctx, player, g) {
+function drawPlayers(ctx, player, g) {
 
     let hue = {
         red: 0,
@@ -535,11 +461,6 @@ function drawPoop(ctx, player, g) {
     ctx.fillStyle = `hsl(${hue[player.color]}, 75%, 50%)`
     let origin = g.positions[ g.uid ] || {x: 0, y: 0, px: 0, py: 0, score: 10}
 
-    // let x = (player.x + (player.x - player.px) * g.transitionCompletionPercentage -
-    // origin.x - (origin.x - origin.px) * g.transitionCompletionPercentage) * g.zoomLevel / 100 + Math.floor(window.innerWidth/2)
-    // let y = ( player.y + (player.y - player.py) * g.transitionCompletionPercentage -
-    // origin.y - (origin.y - origin.py) * g.transitionCompletionPercentage) * g.zoomLevel / 100 + Math.floor(window.innerHeight/2)
-
     let x = 10 * g.zoomLevel / Math.sqrt( origin.score / 3.14159265 ) *
         ( player.px + (player.x - player.px) * g.transitionCompletionPercentage -
         origin.px - (origin.x - origin.px) * g.transitionCompletionPercentage ) +
@@ -549,9 +470,6 @@ function drawPoop(ctx, player, g) {
         origin.py - (origin.y - origin.py) * g.transitionCompletionPercentage ) +
         Math.floor( window.innerHeight/2)
     
-
-    // let r = Math.sqrt( .3183 * player.score) * g.scale
-    // let r = Math.sqrt( .3183 * player.score) * origin.score
     let r = 10 * g.zoomLevel * Math.sqrt( player.score / origin.score)
     let theta, dx, dy
 
@@ -608,7 +526,6 @@ function Radar( ) {
         ctx.lineTo(W - 110, 10)
         ctx.stroke()
 
-        // ctx.fillStyle = '#0c0'
         for (let uid in g.positions) {
             let user = g.positions[uid]
             let origin = g.positions[ g.uid ] || {x: 0, y: 0, px: 0, py: 0, score: 10}
