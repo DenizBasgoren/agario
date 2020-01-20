@@ -29,11 +29,13 @@ let init = {
         // zoomLevel: 100
     // },
     // scale: 1,
-    zoomLevel: 10,
-    myScore: 20,
+    zoomLevel: 1,
+    myScore: 10,
+    eatenBy: null,
+    winnerName: null,
     uid: null,
     ranking: [ ], // [{name,score}]
-    gameState: 'name', // name, game, gameover, disconnected, oops
+    gameState: 'name', // name, game, youareeaten, gameover, oops
     // ping: 0
 }
 
@@ -45,11 +47,13 @@ let act = {
     setGameState: to => produce( s => {
         s.gameState = to
     }),
-    updatePositionsAndRanking: (gp, rnk) => produce( s => {
-        s.ranking = rnk
+    updatePositions: gp => produce( s => {
+        // s.ranking = rnk
         ///////////////// !!!!!!!!!!
         // s.prevPositions = s.currentPositions
         // s.currentPositions = gp
+
+        s.ranking = gp.filter( (p,i) => i < 10)
 
         for (let i = 0; i<gp.length; i++) {
             let currentUser
@@ -82,8 +86,8 @@ let act = {
             }
         }
 
-        if (s.positions[s.uid]) {
-            // console.log(`updatin score with ${s.positions[s.uid].score}`)
+        if (s.positions[s.uid] && s.gameState === 'game') {
+            console.log(`updatin score with ${s.positions[s.uid].score}`)
             s.myScore = s.positions[s.uid].score
         }
 
@@ -127,6 +131,12 @@ let act = {
     resetTransitionPercentage: () => produce( s => {
         // console.log(`reset! prc ${s.transitionCompletionPercentage}`)
         s.transitionCompletionPercentage = 0
+    }),
+    setEatenBy: name => produce( s => {
+        s.eatenBy = name
+    }),
+    setWinnerName: name => produce( s => {
+        s.winnerName = name
     })
 }
 
@@ -182,6 +192,10 @@ function App () {
         websocket.onerror = ev => {
             ss( act.setGameState('oops') )
         }
+
+        websocket.onclose = ev => {
+            ss( act.setGameState('oops') )
+        }
     
         websocket.onmessage = encryptedMsg => {
 
@@ -189,16 +203,22 @@ function App () {
             
             if (msg[0] === 'update') {
                 // console.log('!')
-                ss( act.updatePositionsAndRanking(msg[1], msg[2]) )
+                ss( act.updatePositions(msg[1]) )
                 ss( act.resetTransitionPercentage() )
             }
-            if (msg[0] === 'setuid') {
+            else if (msg[0] === 'setuid') {
                 // console.log(`uid: ${msg[1]}`)
                 ss( act.setUid(msg[1]) )
             }
-            if (msg[0] === 'gameover') {
-                // console.log('gg')
+            else if (msg[0] === 'youareeaten') {
+                console.log('gg')
+                ss( act.setGameState('youareeaten'))
+                ss( act.setEatenBy(msg[1]) )
+            }
+            else if (msg[0] === 'gameover') {
+                console.log('go')
                 ss( act.setGameState('gameover'))
+                ss( act.setWinnerName( msg[1]))
             }
         }        
 
@@ -211,18 +231,51 @@ function App () {
         <HallOfFame>
             {s.ranking}
         </HallOfFame>
+        <Radar />
     </context.Provider>
 }
 
 
 ///// HallOfFame
 function HallOfFame({children}) {
+
+    // let ranking = []
+
+    // for (let uid in children) {
+    //     let player = children[uid]
+
+    //     for (let j = 0; j<10; j++) {
+    //         if ( !ranking[j] ) {
+    //             ranking[j] = {
+    //                 name: player.name,
+    //                 score: player.score
+    //             }
+    //             break
+    //         }
+    //         else {
+    //             if (ranking[j].score < player.score) {
+    //                 ranking.splice(j, 0, {
+    //                     name: player.name,
+    //                     score: player.score
+    //                 })
+    
+    //                 ranking.splice(10, 1)
+    //                 break
+    //             }
+    //         }
+    //     }
+
+    // }
+
+    // let ranking = children.filter((p,i) => i < 10)
+
+
     return <div className='HallOfFame'>
     <span>HALL OF FAME</span>
     <table>
         <tbody>
         {
-            children.map( (record,id) => <tr key={id}>
+            children.filter((p,i) => i < 10).map( (record,id) => <tr key={id}>
                 <td>
                     {record.name}
                 </td>
@@ -241,7 +294,7 @@ function HallOfFame({children}) {
 function DialogManager() {
     let [g,gg] = useContext(context)
     let [name, setName] = useState('')
-    let [color, setColor] = useState('orange')
+    let [color, setColor] = useState('red')
 
     if (g.gameState === 'name') {
         return <Dialog title='WELCOME TO AGARIO' >
@@ -259,14 +312,30 @@ function DialogManager() {
     }
     else if (g.gameState === 'oops') {
         return <Dialog title='OOPS :(' >
-            <span>Your browser doesn't support this game.</span>
+            <span>Something went wrong. Check your connection or try a better browser.</span>
         </Dialog>
     }
     else if (g.gameState === 'game') {
         return null
     }
+    else if (g.gameState === 'youareeaten') {
+        return <Dialog title='GAME OVER'>
+            <div>
+                You are eaten by {g.eatenBy}.
+            </div>
+            <div>
+                Your score is {g.myScore}.
+            </div>
+            <button onClick={handleRestart}>
+                RESTART
+            </button>
+        </Dialog>
+    }
     else if (g.gameState === 'gameover') {
         return <Dialog title='GAME OVER'>
+            <div>
+                Winner: {g.winnerName}.
+            </div>
             <div>
                 Your score is {g.myScore}.
             </div>
@@ -406,7 +475,7 @@ function Canvas() {
             drawPoop( ctx, g.positions[uid], g)
         }
 
-        drawRadar(ctx, g)
+        // drawRadar(ctx, g)
 
     })
 
@@ -416,7 +485,7 @@ function Canvas() {
             Object.values(g.positions).map( (player, id) => {
 
                 // let r = Math.sqrt( .3183 * p.score ) * g.scale
-                let origin = g.positions[ g.uid ] || {x: 0, y: 0, px: 0, py: 0, score: 20}
+                let origin = g.positions[ g.uid ] || {x: 0, y: 0, px: 0, py: 0, score: 10}
                 let r = 10 * g.zoomLevel * Math.sqrt( player.score / origin.score)
 
                 // let x = (p.x + (p.x - p.px) * g.transitionCompletionPercentage -
@@ -447,46 +516,6 @@ function Canvas() {
     </>
 }
 
-function drawRadar(ctx, g) {
-    ctx.strokeStyle = 'lightgray'
-    ctx.fillStyle = 'gray'
-    ctx.lineWidth = 3
-    ctx.beginPath()
-    ctx.arc( window.innerWidth - 110, 100, 90, 0, 6.283)
-    ctx.fill()
-    ctx.beginPath()
-    ctx.arc( window.innerWidth - 110, 100, 90, 0, 6.283)
-    ctx.arc( window.innerWidth - 110, 100, 60, 0, 6.283)
-    ctx.arc( window.innerWidth - 110, 100, 30, 0, 6.283)
-    ctx.moveTo(window.innerWidth - 200, 100)
-    ctx.lineTo(window.innerWidth - 20, 100)
-    ctx.moveTo(window.innerWidth - 110, 190)
-    ctx.lineTo(window.innerWidth - 110, 10)
-    ctx.stroke()
-
-    // ctx.fillStyle = '#0c0'
-    for (let uid in g.positions) {
-        let user = g.positions[uid]
-        let origin = g.positions[ g.uid ] || {x: 0, y: 0, px: 0, py: 0, score: 20}
-        let px = user.x + (user.x - user.px) * g.transitionCompletionPercentage
-        let py = user.y + (user.y - user.py) * g.transitionCompletionPercentage
-        let ox = origin.x + (origin.x - origin.px) * g.transitionCompletionPercentage
-        let oy = origin.y + (origin.y - origin.py) * g.transitionCompletionPercentage
-        let dx = (px - ox > 0 ? 1 : -1) * 3 * Math.sqrt( 1+Math.abs( px - ox) ) -2
-        let dy = (py - oy > 0 ? 1 : -1) * 3 * Math.sqrt( 1+Math.abs( py - oy) ) -2
-
-        if (user.score > origin.score) {
-            ctx.fillStyle = '#c00'
-        }
-        else {
-            ctx.fillStyle = '#0c0'
-        }
-
-        if (dx**2 + dy**2 < 88**2) {
-            ctx.fillRect((window.innerWidth - 110) + dx, 100 + dy, 4, 4)
-        }
-    }
-}
 
 
 function drawPoop(ctx, player, g) {
@@ -504,7 +533,7 @@ function drawPoop(ctx, player, g) {
     ctx.lineWidth = 3
     ctx.strokeStyle = `hsl(${hue[player.color]}, 75%, 25%)`
     ctx.fillStyle = `hsl(${hue[player.color]}, 75%, 50%)`
-    let origin = g.positions[ g.uid ] || {x: 0, y: 0, px: 0, py: 0, score: 20}
+    let origin = g.positions[ g.uid ] || {x: 0, y: 0, px: 0, py: 0, score: 10}
 
     // let x = (player.x + (player.x - player.px) * g.transitionCompletionPercentage -
     // origin.x - (origin.x - origin.px) * g.transitionCompletionPercentage) * g.zoomLevel / 100 + Math.floor(window.innerWidth/2)
@@ -551,4 +580,59 @@ function drawPoop(ctx, player, g) {
     dx = r * .5 * Math.cos( .6 * 3.141) + ( player.x - player.px ) * r * .05
     ctx.strokeRect(x+dx, y+dy, 0, r/3)
 
+}
+
+
+function Radar( ) {
+    let [g, gg] = useContext(context)
+    let ref = useRef(null)
+
+    useEffect(() => {
+        let ctx = ref.current.getContext('2d')
+        ctx.clearRect(0,0, window.innerWidth, window.innerHeight)
+        
+        let W = 210
+        ctx.strokeStyle = 'lightgray'
+        ctx.fillStyle = 'black'
+        ctx.lineWidth = 3
+        ctx.beginPath()
+        ctx.arc( W - 110, 100, 90, 0, 6.283)
+        ctx.fill()
+        ctx.beginPath()
+        ctx.arc( W - 110, 100, 90, 0, 6.283)
+        ctx.arc( W - 110, 100, 60, 0, 6.283)
+        ctx.arc( W - 110, 100, 30, 0, 6.283)
+        ctx.moveTo(W - 200, 100)
+        ctx.lineTo(W - 20, 100)
+        ctx.moveTo(W - 110, 190)
+        ctx.lineTo(W - 110, 10)
+        ctx.stroke()
+
+        // ctx.fillStyle = '#0c0'
+        for (let uid in g.positions) {
+            let user = g.positions[uid]
+            let origin = g.positions[ g.uid ] || {x: 0, y: 0, px: 0, py: 0, score: 10}
+            let px = user.x + (user.x - user.px) * g.transitionCompletionPercentage
+            let py = user.y + (user.y - user.py) * g.transitionCompletionPercentage
+            let ox = origin.x + (origin.x - origin.px) * g.transitionCompletionPercentage
+            let oy = origin.y + (origin.y - origin.py) * g.transitionCompletionPercentage
+            let dx = (px - ox > 0 ? 1 : -1) * 3 * Math.sqrt( 1+Math.abs( px - ox) ) -2
+            let dy = (py - oy > 0 ? 1 : -1) * 3 * Math.sqrt( 1+Math.abs( py - oy) ) -2
+
+            if (user.score > origin.score) {
+                ctx.fillStyle = '#c00'
+            }
+            else {
+                ctx.fillStyle = '#0c0'
+            }
+
+            if (dx**2 + dy**2 < 88**2) {
+                ctx.fillRect((W - 110) + dx, 100 + dy, 4, 4)
+            }
+        }
+    })
+
+    return <div className='Radar'>
+        <canvas ref={ref} width={200} height={200} />
+    </div>
 }
