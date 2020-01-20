@@ -3,6 +3,7 @@
     padding: 0;
     margin: 0;
     overflow: hidden;
+    text-align: center;
 }
 
 html, body {
@@ -43,7 +44,7 @@ body {
 
 .HallOfFame > table {
     width: 100%;
-    font-size: 30px;
+    font-size: 20px;
 }
 
 
@@ -127,7 +128,26 @@ input {
 .Canvas ~ span {
     position: absolute;
     font-family: "Bandicoot";
-    z-index: 4;
+    /* z-index: 4; */
     top: 0;
     left: 0;
+}
+
+
+.Radar {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: absolute;
+    right: 0;
+    top: 0;
+    z-index: 10;
+    /* background: black; */
+    /* color: white; */
+    opacity: 0.5;
+    padding: 10px;
+    border-radius: 5px;
+    width: 200px;
+    height: 200px;
+    margin: 10px;
 }
