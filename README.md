@@ -7,5 +7,5 @@ Online multiplayer Agario clone (v1.0)
 * `cd agario`
 * `npm install`
 * `npm run watch`
-* `npm run start`
+* On another terminal window: `npm run start`
 * And go to `localhost:3000`
