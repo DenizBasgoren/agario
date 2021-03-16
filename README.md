@@ -1,7 +1,7 @@
 # agario
 Online multiplayer Agario clone (v1.0)
 
-### Play online at [https://node-agario-clone.herokuapp.com](Heroku)
+### Play online at [https://node-agario-clone.herokuapp.com](https://node-agario-clone.herokuapp.com)
 
 ### Or play locally:
 * `cd agario`
